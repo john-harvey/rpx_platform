@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secure Meeting</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="lobby" class="screen">
+      <h1>Secure Meeting</h1>
+      <div class="controls">
+        <button id="createBtn">Create Meeting</button>
+        
+        <div id="createOptions" class="hidden">
+          <input type="password" id="passphraseInput" placeholder="Optional: Set passphrase">
+          <button id="confirmCreateBtn">Create</button>
+          <button id="cancelCreateBtn">Cancel</button>
+        </div>
+        
+        <div class="join-group">
+          <input type="text" id="roomInput" placeholder="Enter meeting ID or invite link">
+          <button id="joinBtn">Join Meeting</button>
+        </div>
+        
+        <div id="passphrasePrompt" class="hidden">
+          <input type="password" id="joinPassphraseInput" placeholder="Enter passphrase">
+          <button id="submitPassphraseBtn">Submit</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="meeting" class="screen hidden">
+      <div id="header">
+        <span id="roomIdDisplay"></span>
+        <div id="hostControls" class="hidden">
+          <button id="generateTokenBtn" class="host-btn">🎟️ Generate Invite</button>
+          <button id="setPassphraseBtn" class="host-btn">🔑 Set Password</button>
+          <button id="lockRoomBtn" class="host-btn">🔓 Lock</button>
+        </div>
+        <button id="leaveBtn">Leave</button>
+      </div>
+      
+      <div id="videoGrid"></div>
+      
+      <div id="controls">
+        <button id="toggleVideo" class="control-btn">📹</button>
+        <button id="toggleAudio" class="control-btn">🎤</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/client.js"></script>
+</body>
+</html>

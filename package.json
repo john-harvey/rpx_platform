@@ -1,0 +1,12 @@
+{
+  "name": "secure-meeting",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "setup-pinning": "node generate-keys.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
