@@ -1,3 +1,4 @@
+
 import { E2EEncryption } from './crypto.js';
 
 // WebRTC Configuration - using public STUN servers
@@ -43,7 +44,9 @@ class SecureMeeting {
     this.hostId = null;
     this.serverVerified = false;
     this.pendingMessages = [];
-    
+
+    this.breakouts = []; // [{ subRoomId, name, participants: [] }]
+
     this.init();
   }
 
@@ -69,6 +72,12 @@ class SecureMeeting {
     document.getElementById('lockRoomBtn').onclick = () => this.toggleRoomLock();
     document.getElementById('generateTokenBtn').onclick = () => this.generateToken();
     document.getElementById('setPassphraseBtn').onclick = () => this.promptSetPassphrase();
+
+    const returnMainBtn = document.getElementById('returnMainBtn');
+    if (returnMainBtn) returnMainBtn.onclick = () => this.returnToMain();
+
+    const createBreakoutsBtn = document.getElementById('createBreakoutsBtn');
+    if (createBreakoutsBtn) createBreakoutsBtn.onclick = () => this.createBreakouts();
   }
 
   showCreateOptions() {
@@ -322,15 +331,15 @@ class SecureMeeting {
         break;
       case 'room-created':
         this.roomId = msg.roomId;
+        this.subRoomId = 'main';
         this.isHost = msg.isHost;
         this.hostId = this.clientId;
         this.enterMeeting();
-        if (msg.hasPassphrase) {
-          alert('Meeting created with passphrase protection');
-        }
+        if (msg.hasPassphrase) alert('Meeting created with passphrase protection');
         break;
       case 'room-joined':
         this.roomId = msg.roomId;
+        this.subRoomId = 'main';
         this.isHost = msg.isHost;
         this.hostId = msg.hostId;
         this.enterMeeting();
@@ -382,6 +391,7 @@ class SecureMeeting {
         this.hostId = this.clientId;
         alert('You are now the host');
         this.updateHostControls();
+        this.renderBreakoutsPanel();
         break;
       case 'new-host':
         this.hostId = msg.hostId;
@@ -392,6 +402,193 @@ class SecureMeeting {
         document.getElementById('joinBtn').disabled = false;
         document.getElementById('joinBtn').textContent = 'Join Meeting';
         break;
+      case 'room-switched':
+        this.roomId = msg.roomId;
+        this.subRoomId = msg.subRoomId;
+        this.hostId = msg.hostId;
+        this.updateRoomLabel();
+        this.renderBreakoutsPanel();           // ← refresh panel
+        this.updateReturnMainButton();
+        await this.resetPeersForRoomSwitch(msg.participants);
+        break;
+      case 'breakouts-state':
+        this.breakouts = msg.rooms || [];
+        this.updateRoomLabel();
+        this.renderBreakoutsPanel();
+        break;
+    }
+  }
+
+  updateReturnMainButton() {
+    const btn = document.getElementById('returnMainBtn');
+    if (!btn) return;
+
+    if (this.subRoomId === 'main') {
+      btn.classList.add('hidden');
+      // or btn.disabled = true; if you prefer disabling
+    } else {
+      btn.classList.remove('hidden');
+      // btn.disabled = false;
+    }
+  }
+  
+  enterMeeting() {
+    document.getElementById('lobby').classList.add('hidden');
+    document.getElementById('meeting').classList.remove('hidden');
+    document.getElementById('roomIdDisplay').textContent = `Meeting ID: ${this.roomId}`;
+
+    this.addVideoStream(this.clientId, this.localStream, 'You');
+    this.updateHostControls();
+    this.updateRoomLabel();
+    this.renderBreakoutsPanel();
+  }
+
+  updateHostControls() {
+    const hostControls = document.getElementById('hostControls');
+    if (this.isHost) {
+      hostControls.classList.remove('hidden');
+    } else {
+      hostControls.classList.add('hidden');
+    }
+    const panel = document.getElementById('breakoutsPanel');
+    if (panel) {
+      if (this.isHost) panel.classList.remove('hidden');
+      else panel.classList.add('hidden');
+    }
+    // Ensure breakout controls visibility matches host state
+    const createBreakoutsBtn = document.getElementById('createBreakoutsBtn');
+    if (createBreakoutsBtn) createBreakoutsBtn.disabled = !this.isHost;
+  }
+
+  updateRoomLabel() {
+    const el = document.getElementById('subRoomDisplay');
+    if (!el) return;
+
+    const found = this.breakouts.find(r => r.subRoomId === this.subRoomId);
+    const name = found?.name || (this.subRoomId === 'main' ? 'Main' : this.subRoomId);
+    el.textContent = `Room: ${name}`;
+  }
+
+  async resetPeersForRoomSwitch(participants) {
+    this.peers.forEach(pc => pc.close());
+    this.peers.clear();
+
+    if (ENABLE_E2E_ENCRYPTION) {
+      for (const peerId of Array.from(this.crypto.peerPublicKeys.keys())) {
+        this.crypto.removePeer(peerId);
+      }
+    }
+
+    for (const node of Array.from(document.getElementById('videoGrid').children)) {
+      if (node.id !== `video-${this.clientId}`) node.remove();
+    }
+
+    for (const peerId of participants) {
+      await this.exchangeKeys(peerId);
+    }
+  }
+
+  returnToMain() {
+    if (!this.roomId) return;
+    this.ws.send(JSON.stringify({ type: 'switch-breakout', subRoomId: 'main' }));
+  }
+
+  createBreakouts() {
+    if (!this.isHost) return;
+    const countStr = prompt('How many breakout rooms? (e.g., 2)');
+    if (countStr === null) return;
+    this.ws.send(JSON.stringify({ type: 'create-breakouts', count: Number(countStr) }));
+  }
+
+  assignParticipantTo(subRoomId, targetId) {
+    if (!this.isHost) return;
+    this.ws.send(JSON.stringify({ type: 'assign-breakout', targetId, subRoomId }));
+  }
+
+  joinSubRoom(subRoomId) {
+    if (!this.roomId) return;
+    this.ws.send(JSON.stringify({ type: 'switch-breakout', subRoomId }));
+  }
+
+  renderBreakoutsPanel() {
+    const panel = document.getElementById('breakoutsPanel');
+    const roomsEl = document.getElementById('breakoutsRooms');
+    const summaryEl = document.getElementById('breakoutsSummary');
+    if (!panel || !roomsEl || !summaryEl) return;
+
+    if (!this.isHost) {
+      panel.classList.add('hidden');
+      return;
+    }
+    panel.classList.remove('hidden');
+
+    const totalParticipants = this.breakouts.reduce((acc, r) => acc + (r.participants?.length || 0), 0);
+    summaryEl.textContent = `${this.breakouts.length} rooms • ${totalParticipants} participants`;
+
+    roomsEl.innerHTML = '';
+
+    const roomOptions = this.breakouts.map(r => ({ subRoomId: r.subRoomId, name: r.name }));
+
+    for (const room of this.breakouts) {
+      const wrap = document.createElement('div');
+      wrap.className = 'breakout-room';
+
+      const header = document.createElement('div');
+      header.className = 'breakout-room-header';
+
+      const name = document.createElement('div');
+      name.className = 'breakout-room-name';
+      name.textContent = room.name || room.subRoomId;
+
+      const actions = document.createElement('div');
+      actions.className = 'breakout-room-actions';
+
+      const joinBtn = document.createElement('button');
+      joinBtn.className = 'breakout-join-btn';
+      joinBtn.textContent = this.subRoomId === room.subRoomId ? 'You are here' : 'Join';
+      joinBtn.disabled = this.subRoomId === room.subRoomId;
+      joinBtn.onclick = () => this.joinSubRoom(room.subRoomId);
+
+      actions.appendChild(joinBtn);
+      header.appendChild(name);
+      header.appendChild(actions);
+      wrap.appendChild(header);
+
+      const participants = room.participants || [];
+      if (participants.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'breakout-participant';
+        empty.textContent = '— empty —';
+        wrap.appendChild(empty);
+      } else {
+        for (const pid of participants) {
+          const row = document.createElement('div');
+          row.className = 'breakout-participant';
+
+          const idEl = document.createElement('div');
+          idEl.className = 'breakout-participant-id';
+          idEl.textContent = pid === this.clientId ? `${pid} (you)` : pid;
+
+          const sel = document.createElement('select');
+          sel.className = 'breakout-assign-select';
+
+          for (const opt of roomOptions) {
+            const o = document.createElement('option');
+            o.value = opt.subRoomId;
+            o.textContent = opt.name || opt.subRoomId;
+            if (opt.subRoomId === room.subRoomId) o.selected = true;
+            sel.appendChild(o);
+          }
+
+          sel.onchange = () => this.assignParticipantTo(sel.value, pid);
+
+          row.appendChild(idEl);
+          row.appendChild(sel);
+          wrap.appendChild(row);
+        }
+      }
+
+      roomsEl.appendChild(wrap);
     }
   }
 
@@ -485,16 +682,136 @@ class SecureMeeting {
     
     this.addVideoStream(this.clientId, this.localStream, 'You');
     this.updateHostControls();
+    this.updateRoomLabel();
   }
 
-  updateHostControls() {
-    const hostControls = document.getElementById('hostControls');
-    if (this.isHost) {
-      hostControls.classList.remove('hidden');
-    } else {
-      hostControls.classList.add('hidden');
+  updateRoomLabel() {
+    const el = document.getElementById('subRoomDisplay');
+    if (!el) return;
+
+    const found = this.breakouts.find(r => r.subRoomId === this.subRoomId);
+    const name = found?.name || (this.subRoomId === 'main' ? 'Main' : this.subRoomId);
+    el.textContent = `Room: ${name}`;
+  }
+
+  async resetPeersForRoomSwitch(participants) {
+    // Close all peer connections
+    this.peers.forEach(pc => pc.close());
+    this.peers.clear();
+
+    // Clean up encryption keys
+    if (ENABLE_E2E_ENCRYPTION) {
+      // remove all peers except self
+      for (const peerId of Array.from(this.crypto.peerPublicKeys.keys())) {
+        this.crypto.removePeer(peerId);
+      }
+    }
+
+    // Remove all remote videos
+    for (const node of Array.from(document.getElementById('videoGrid').children)) {
+      if (node.id !== `video-${this.clientId}`) node.remove();
+    }
+
+    // Reconnect to peers in the new room
+    for (const peerId of participants) {
+      await this.exchangeKeys(peerId);
     }
   }
+
+  returnToMain() {
+    if (!this.roomId) return;
+    this.ws.send(JSON.stringify({ type: 'switch-breakout', subRoomId: 'main' }));
+  }
+
+  createBreakouts() {
+    if (!this.isHost) return;
+    const countStr = prompt('How many breakout rooms? (e.g., 2)');
+    if (countStr === null) return;
+    this.ws.send(JSON.stringify({ type: 'create-breakouts', count: Number(countStr) }));
+  }
+
+  assignParticipantTo(subRoomId, targetId) {
+    if (!this.isHost) return;
+    this.ws.send(JSON.stringify({ type: 'assign-breakout', targetId, subRoomId }));
+  }
+
+  renderBreakoutsUI() {
+    this.updateRoomLabel();
+
+    // Minimal approach: reuse per-participant UI rendered in addVideoStream()
+    // by updating any existing dropdown options (if present).
+    for (const [peerId] of this.peers.entries()) {
+      const sel = document.getElementById(`breakout-select-${peerId}`);
+      if (!sel) continue;
+      sel.innerHTML = '';
+      for (const r of this.breakouts) {
+        const opt = document.createElement('option');
+        opt.value = r.subRoomId;
+        opt.textContent = r.name;
+        sel.appendChild(opt);
+      }
+    }
+  }
+
+  addVideoStream(id, stream, label) {
+    if (document.getElementById(`video-${id}`)) return;
+
+    const container = document.createElement('div');
+    container.className = 'video-container';
+    container.id = `video-${id}`;
+
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    if (id === this.clientId) video.muted = true;
+
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'video-label';
+    labelDiv.textContent = label;
+
+    container.appendChild(video);
+    container.appendChild(labelDiv);
+
+    if (this.isHost && id !== this.clientId) {
+      const controls = document.createElement('div');
+      controls.className = 'participant-controls';
+
+      const muteBtn = document.createElement('button');
+      muteBtn.textContent = '🔇';
+      muteBtn.className = 'participant-btn';
+      muteBtn.title = 'Request mute';
+      muteBtn.onclick = () => this.muteParticipant(id);
+
+      const kickBtn = document.createElement('button');
+      kickBtn.textContent = '❌';
+      kickBtn.className = 'participant-btn';
+      kickBtn.title = 'Remove participant';
+      kickBtn.onclick = () => this.kickParticipant(id);
+
+      const breakoutSelect = document.createElement('select');
+      breakoutSelect.id = `breakout-select-${id}`;
+      breakoutSelect.className = 'breakout-select';
+      breakoutSelect.title = 'Assign breakout room';
+      breakoutSelect.onchange = () => this.assignParticipantTo(breakoutSelect.value, id);
+
+      // Populate options (may be empty until breakouts-state arrives)
+      for (const r of this.breakouts) {
+        const opt = document.createElement('option');
+        opt.value = r.subRoomId;
+        opt.textContent = r.name;
+        breakoutSelect.appendChild(opt);
+      }
+
+      controls.appendChild(muteBtn);
+      controls.appendChild(kickBtn);
+      controls.appendChild(breakoutSelect);
+      container.appendChild(controls);
+    }
+
+    document.getElementById('videoGrid').appendChild(container);
+  }
+
 
   updateLockStatus(locked) {
     const lockBtn = document.getElementById('lockRoomBtn');
@@ -645,51 +962,6 @@ class SecureMeeting {
       targetId,
       signal
     }));
-  }
-
-  addVideoStream(id, stream, label) {
-    if (document.getElementById(`video-${id}`)) return;
-
-    const container = document.createElement('div');
-    container.className = 'video-container';
-    container.id = `video-${id}`;
-
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    if (id === this.clientId) video.muted = true;
-
-    const labelDiv = document.createElement('div');
-    labelDiv.className = 'video-label';
-    labelDiv.textContent = label;
-
-    container.appendChild(video);
-    container.appendChild(labelDiv);
-
-    // Add host controls for participants (not for self)
-    if (this.isHost && id !== this.clientId) {
-      const controls = document.createElement('div');
-      controls.className = 'participant-controls';
-      
-      const muteBtn = document.createElement('button');
-      muteBtn.textContent = '🔇';
-      muteBtn.className = 'participant-btn';
-      muteBtn.title = 'Request mute';
-      muteBtn.onclick = () => this.muteParticipant(id);
-      
-      const kickBtn = document.createElement('button');
-      kickBtn.textContent = '❌';
-      kickBtn.className = 'participant-btn';
-      kickBtn.title = 'Remove participant';
-      kickBtn.onclick = () => this.kickParticipant(id);
-      
-      controls.appendChild(muteBtn);
-      controls.appendChild(kickBtn);
-      container.appendChild(controls);
-    }
-
-    document.getElementById('videoGrid').appendChild(container);
   }
 
   removePeer(peerId) {
