@@ -407,16 +407,31 @@ class SecureMeeting {
         this.subRoomId = msg.subRoomId;
         this.hostId = msg.hostId;
         this.updateRoomLabel();
+        this.renderBreakoutsPanel();           // ← refresh panel
+        this.updateReturnMainButton();
         await this.resetPeersForRoomSwitch(msg.participants);
         break;
-
       case 'breakouts-state':
         this.breakouts = msg.rooms || [];
         this.updateRoomLabel();
+        this.renderBreakoutsPanel();
         break;
     }
   }
 
+  updateReturnMainButton() {
+    const btn = document.getElementById('returnMainBtn');
+    if (!btn) return;
+
+    if (this.subRoomId === 'main') {
+      btn.classList.add('hidden');
+      // or btn.disabled = true; if you prefer disabling
+    } else {
+      btn.classList.remove('hidden');
+      // btn.disabled = false;
+    }
+  }
+  
   enterMeeting() {
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('meeting').classList.remove('hidden');
