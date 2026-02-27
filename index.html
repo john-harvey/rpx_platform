@@ -34,16 +34,36 @@
     <div id="meeting" class="screen hidden">
       <div id="header">
         <span id="roomIdDisplay"></span>
+        <span id="subRoomDisplay" style="margin-left: 12px;"></span>
+
         <div id="hostControls" class="hidden">
+          <button id="createBreakoutsBtn" class="host-btn">🧩 Breakouts</button>
           <button id="generateTokenBtn" class="host-btn">🎟️ Generate Invite</button>
           <button id="setPassphraseBtn" class="host-btn">🔑 Set Password</button>
           <button id="lockRoomBtn" class="host-btn">🔓 Lock</button>
         </div>
+
+        <button id="returnMainBtn">Return to Main</button>
         <button id="leaveBtn">Leave</button>
       </div>
-      
-      <div id="videoGrid"></div>
-      
+
+      <div id="meetingBody">
+        <div id="videoGrid"></div>
+
+        <aside id="breakoutsPanel" class="hidden">
+          <div class="panel-header">
+            <div class="panel-title">Breakouts</div>
+            <div class="panel-subtitle" id="breakoutsSummary">—</div>
+          </div>
+
+          <div id="breakoutsRooms"></div>
+
+          <div class="panel-footer">
+            <small>Host can move participants between rooms. Video follows the room you join.</small>
+          </div>
+        </aside>
+      </div>
+
       <div id="controls">
         <button id="toggleVideo" class="control-btn">📹</button>
         <button id="toggleAudio" class="control-btn">🎤</button>

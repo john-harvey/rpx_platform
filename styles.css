@@ -115,6 +115,124 @@ input:focus {
   gap: 1rem;
 }
 
+/* NEW: split layout (videos + breakout panel) */
+#meetingBody {
+  flex: 1;
+  display: flex;
+  gap: 1rem;
+  min-height: 0;
+  margin-bottom: 1rem;
+}
+
+#videoGrid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* NEW: breakout panel */
+#breakoutsPanel {
+  width: 340px;
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.panel-title {
+  font-weight: 600;
+}
+
+.panel-subtitle {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.85rem;
+}
+
+.panel-footer {
+  margin-top: 0.75rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.breakout-room {
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.breakout-room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.breakout-room-name {
+  font-weight: 600;
+}
+
+.breakout-room-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.breakout-join-btn {
+  padding: 0.35rem 0.6rem;
+  background: #3a3a3a;
+  font-size: 0.85rem;
+}
+
+.breakout-join-btn:hover {
+  background: #4a4a4a;
+}
+
+.breakout-participant {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.breakout-participant:first-child {
+  border-top: none;
+}
+
+.breakout-participant-id {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
+.breakout-assign-select {
+  background: #1f1f1f;
+  color: white;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.85rem;
+}
+
 #roomIdDisplay {
   font-family: monospace;
   font-size: 1.1rem;
@@ -149,15 +267,6 @@ input:focus {
 
 #leaveBtn:hover {
   background: #b91c1c;
-}
-
-#videoGrid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
-  overflow-y: auto;
 }
 
 .video-container {
