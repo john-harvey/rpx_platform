@@ -73,6 +73,9 @@ class SecureMeeting {
     document.getElementById('generateTokenBtn').onclick = () => this.generateToken();
     document.getElementById('setPassphraseBtn').onclick = () => this.promptSetPassphrase();
 
+    // One-time creation of local overlay (we'll reuse it)
+    this.switchOverlay = null;
+
     const returnMainBtn = document.getElementById('returnMainBtn');
     if (returnMainBtn) returnMainBtn.onclick = () => this.returnToMain();
 
@@ -403,6 +406,12 @@ class SecureMeeting {
         document.getElementById('joinBtn').textContent = 'Join Meeting';
         break;
       case 'room-switched':
+        if (msg.clientId === this.clientId || !msg.clientId) {   // only if it's me
+          this.subRoomId = msg.subRoomId;
+          const roomName = this.breakouts.find(r => r.subRoomId === msg.subRoomId)?.name ||
+              (msg.subRoomId === 'main' ? 'Main Room' : msg.subRoomId);
+          this.showSwitchFeedback(roomName);
+        }
         this.roomId = msg.roomId;
         this.subRoomId = msg.subRoomId;
         this.hostId = msg.hostId;
@@ -431,7 +440,7 @@ class SecureMeeting {
       // btn.disabled = false;
     }
   }
-  
+
   enterMeeting() {
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('meeting').classList.remove('hidden');
@@ -490,6 +499,7 @@ class SecureMeeting {
 
   returnToMain() {
     if (!this.roomId) return;
+    this.showSwitchFeedback('main');
     this.ws.send(JSON.stringify({ type: 'switch-breakout', subRoomId: 'main' }));
   }
 
@@ -547,7 +557,15 @@ class SecureMeeting {
       joinBtn.className = 'breakout-join-btn';
       joinBtn.textContent = this.subRoomId === room.subRoomId ? 'You are here' : 'Join';
       joinBtn.disabled = this.subRoomId === room.subRoomId;
-      joinBtn.onclick = () => this.joinSubRoom(room.subRoomId);
+      joinBtn.onclick = () => {
+        if (this.subRoomId !== room.subRoomId) {
+          this.showSwitchFeedback(room.subRoomId);           // ← add this line
+          this.ws.send(JSON.stringify({
+            type: 'switch-breakout',
+            subRoomId: room.subRoomId
+          }));
+        }
+      };
 
       actions.appendChild(joinBtn);
       header.appendChild(name);
@@ -1014,7 +1032,59 @@ class SecureMeeting {
     this.roomId = null;
     this.localStream = null;
   }
-}
+  showSwitchFeedback(targetSubRoomId) {
+    const localTile = this.getLocalVideoTile();
+    if (!localTile) return;
+
+    // Find the friendly name from this.breakouts
+    let roomName = 'Main Room';
+    if (targetSubRoomId !== 'main') {
+      const room = this.breakouts.find(r => r.subRoomId === targetSubRoomId);
+      roomName = room?.name || targetSubRoomId;  // fallback to subRoomId if name missing
+    }
+
+    if (!this.switchOverlay) {
+      this.switchOverlay = document.createElement('div');
+      this.switchOverlay.className = 'switch-overlay';
+      localTile.appendChild(this.switchOverlay);  // create once, reuse
+    }
+
+    // Update text dynamically
+    this.switchOverlay.innerHTML = `
+    <div class="spinner"></div>
+    Moving to ${roomName}…
+  `;
+
+    // Show
+    this.switchOverlay.classList.add('visible');
+
+    // Auto-hide – shorter duration
+    clearTimeout(this._switchTimeout);
+    this._switchTimeout = setTimeout(() => {
+      this.hideSwitchFeedback();
+    }, 1500);  // ← 2 seconds; change to 1500 or 1800 if you want even quicker
+  }
+
+  hideSwitchFeedback() {
+    if (this.switchOverlay) {
+      this.switchOverlay.classList.remove('visible');
+    }
+  }
+
+  getLocalVideoTile() {
+    // Option A: if you already track your local video element
+    if (this.localVideo) {
+      return this.localVideo.parentElement;  // assuming video is wrapped in .video-tile
+    }
+
+    // Option B: find by data attribute or known ID/class
+    return document.querySelector('.video-tile.local') ||    // ← add class="video-tile local" to your local tile in render
+        document.querySelector('[data-client-id="' + this.clientId + '"]') ||
+        document.getElementById('localVideoWrapper') ||    // if you have a dedicated wrapper
+        document.querySelector('#videoGrid > div:first-child');  // fallback – often local is first
+  }
+
+}// end class
 
 // Initialize app
 new SecureMeeting();

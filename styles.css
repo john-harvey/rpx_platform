@@ -340,3 +340,43 @@ input:focus {
 .participant-btn:hover {
   background: rgba(0, 0, 0, 0.9);
 }
+
+.video-tile {
+  position: relative;          /* Important: makes absolute positioning work inside tile */
+  overflow: hidden;
+}
+
+.switch-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+  font-weight: bold;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.switch-overlay.visible {
+  opacity: 1;
+}
+
+.switch-overlay .spinner {
+  border: 4px solid rgba(255,255,255,0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  animation: spin 1s linear infinite;
+  margin-right: 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
