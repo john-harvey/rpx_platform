@@ -733,6 +733,7 @@ class SecureMeeting {
     for (const peerId of participants) {
       await this.exchangeKeys(peerId);
     }
+    this.hideSwitchFeedback();
   }
 
   returnToMain() {
