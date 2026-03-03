@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "setup-pinning": "node generate-keys.js"
+    "setup-pinning": "node generate-keys.js",
+    "setup-ssl": "node generate-ssl-cert.js",
+    "setup": "npm run setup-ssl && npm run setup-pinning"
   },
   "dependencies": {
     "ws": "^8.16.0"
