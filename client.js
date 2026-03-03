@@ -26,8 +26,7 @@ rQIDAQAB
 // Set to false to disable certificate pinning (for development)
 const ENABLE_CERTIFICATE_PINNING = false;
 
-// Set to false to disable E2E encryption (for non-HTTPS development)
-// Note: crypto.subtle requires HTTPS or localhost
+// E2E encryption automatically enabled in secure contexts (HTTPS/localhost)
 const ENABLE_E2E_ENCRYPTION = window.isSecureContext;
 
 class SecureMeeting {

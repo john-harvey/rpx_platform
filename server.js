@@ -1,9 +1,23 @@
-import { createServer } from 'http';
+import { createServer } from 'https';
 import { readFileSync, existsSync } from 'fs';
 import { WebSocketServer } from 'ws';
 import { randomBytes, sign, constants as cryptoConstants } from 'crypto';
 
 const PORT = 3000;
+
+// Load SSL certificates
+let httpsOptions = null;
+if (existsSync('./ssl/private-key.pem') && existsSync('./ssl/certificate.pem')) {
+  httpsOptions = {
+    key: readFileSync('./ssl/private-key.pem'),
+    cert: readFileSync('./ssl/certificate.pem')
+  };
+  console.log('✓ SSL certificates loaded - HTTPS enabled');
+} else {
+  console.error('❌ SSL certificates not found!');
+  console.error('   Run: node generate-ssl-cert.js');
+  process.exit(1);
+}
 
 // Load server identity private key for certificate pinning
 let serverIdentityPrivateKey = null;
@@ -61,7 +75,7 @@ setInterval(() => {
   }
 }, 60000);
 
-const server = createServer((req, res) => {
+const server = createServer(httpsOptions, (req, res) => {
   if (req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(readFileSync('./index.html'));
@@ -751,5 +765,9 @@ function unlockRoom(hostId) {
   }
 }
 server.listen(PORT, () => {
-  console.log(`Secure meeting server running on http://localhost:${PORT}`);
+  console.log(`Secure meeting server running on https://localhost:${PORT}`);
+  console.log(`Also accessible at https://192.168.50.157:${PORT}`);
+  console.log('\n⚠️  Self-signed certificate warning:');
+  console.log('   Your browser will show a security warning.');
+  console.log('   Click "Advanced" → "Proceed to localhost" to continue.\n');
 });
