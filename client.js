@@ -13,13 +13,13 @@ const rtcConfig = {
 // Replace this with your actual server public key after running generate-keys.js
 const PINNED_SERVER_PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3OtJyQOMJsQl0wNjQTwH
-AXsdslsVE5Q9/HkhPmsxbDkscV1ZbuMmXqJpDzn/5BXFVgyPZUd8ObBMN8ITN1Hq
-MFxqsDq/j99N2Lhx+zUVwTpv4M3HN93EOKdWmxIv6H222IvfTcV/03tZE4g04OG1
-0LC0onIXtG/Ha31KcVDP9JEn3dcwwcPOGEFss1NegsU2lyGKLQdxgDjR3w45LKgY
-FXmyy8S/S2K8tc1wnDMkJpu1Zcn/4RiO0kqg/4iWy1igBmMcIMQZNV611z2CIo5A
-ViWJtXSG1fckZ7Z6HtImIVLURfLF7vy213zV57AHeET6YRoHTisnRhsGdK4BcCFP
-rQIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsmVRl436GGXEd6ZcfBLE
+RyhexOOtfTyiy6gHwKeob/RR3+Kbyvar44jBeb6NmiyH5F2ZtNboFaisbeVy7h30
+Ar6mhLzaOj95zoDM4/CxXA2ZwCsHwIGJxffrOt0dLuIE6oJgVVBxW5UxIGilocbD
+756WmpHhW5jgO6s7vTDOfwc/Q7ktRKgF8+XG+/FrMfaTBU1TpEO6QYg2XeyojDL/
+PyDlxFPu7bYU+ZnItKJN01CgH9I9+2MDJ5tqkPsT7jJtrDRW2NfKq2ByGuK2r9KR
+fJgk2A9SzS3p2DxnVUhRTdWQWdV7JmrpblxcZ8/9G2tp1dor9rcYM9/qlJPcmzk5
+AQIDAQAB
 -----END PUBLIC KEY-----
 `.trim();
 
@@ -80,6 +80,60 @@ class SecureMeeting {
 
     const createBreakoutsBtn = document.getElementById('createBreakoutsBtn');
     if (createBreakoutsBtn) createBreakoutsBtn.onclick = () => this.createBreakouts();
+
+    // Setup custom modal
+    this.setupCustomModal();
+  }
+
+  setupCustomModal() {
+    const modal = document.getElementById('customModal');
+    const modalOk = document.getElementById('modalOk');
+    const modalCancel = document.getElementById('modalCancel');
+    const modalInput = document.getElementById('modalInput');
+
+    modalOk.onclick = () => {
+      if (this.modalResolve) {
+        this.modalResolve(modalInput.value);
+        this.modalResolve = null;
+      }
+      modal.classList.add('hidden');
+      modalInput.value = '';
+    };
+
+    modalCancel.onclick = () => {
+      if (this.modalResolve) {
+        this.modalResolve(null);
+        this.modalResolve = null;
+      }
+      modal.classList.add('hidden');
+      modalInput.value = '';
+    };
+
+    // Allow Enter key to submit
+    modalInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        modalOk.click();
+      } else if (e.key === 'Escape') {
+        modalCancel.click();
+      }
+    };
+  }
+
+  showCustomPrompt(title, placeholder = '') {
+    return new Promise((resolve) => {
+      this.modalResolve = resolve;
+      const modal = document.getElementById('customModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalInput = document.getElementById('modalInput');
+
+      modalTitle.textContent = title;
+      modalInput.placeholder = placeholder;
+      modalInput.value = '';
+      modal.classList.remove('hidden');
+      
+      // Focus input after a brief delay
+      setTimeout(() => modalInput.focus(), 100);
+    });
   }
 
   showCreateOptions() {
@@ -132,9 +186,13 @@ class SecureMeeting {
     this.ws.send(JSON.stringify({ type: 'generate-token' }));
   }
 
-  promptSetPassphrase() {
+  async promptSetPassphrase() {
     if (!this.isHost) return;
-    const passphrase = prompt('Enter a passphrase for this meeting (leave empty to remove):');
+    const passphrase = await this.showCustomPrompt(
+      'Set Meeting Password',
+      'Enter passphrase (leave empty to remove)'
+    );
+    
     if (passphrase !== null) {
       // Hash passphrase client-side before sending
       if (passphrase.trim()) {
@@ -189,12 +247,16 @@ class SecureMeeting {
     this.ws.onopen = () => {
       console.log('WebSocket connected');
       
-      // Verify server identity before allowing any operations
-      if (ENABLE_CERTIFICATE_PINNING) {
+      // Only verify server identity in HTTPS mode with certificate pinning enabled
+      if (ENABLE_CERTIFICATE_PINNING && window.location.protocol === 'https:') {
         this.verifyServerIdentity();
       } else {
-        console.warn('⚠ Certificate pinning disabled');
         this.serverVerified = true;
+        if (window.location.protocol === 'http:') {
+          console.warn('⚠️ Running in HTTP mode - certificate pinning disabled');
+        } else {
+          console.warn('⚠ Certificate pinning disabled');
+        }
       }
     };
 
@@ -502,9 +564,12 @@ class SecureMeeting {
     this.ws.send(JSON.stringify({ type: 'switch-breakout', subRoomId: 'main' }));
   }
 
-  createBreakouts() {
+  async createBreakouts() {
     if (!this.isHost) return;
-    const countStr = prompt('How many breakout rooms? (e.g., 2)');
+    const countStr = await this.showCustomPrompt(
+      'Create Breakout Rooms',
+      'How many breakout rooms? (e.g., 2)'
+    );
     if (countStr === null) return;
     this.ws.send(JSON.stringify({ type: 'create-breakouts', count: Number(countStr) }));
   }
@@ -677,7 +742,24 @@ class SecureMeeting {
   }
 
   async initLocalStream() {
+    // First, list available devices for debugging
     try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      console.log('📱 Available media devices:');
+      devices.forEach(device => {
+        console.log(`  ${device.kind}: ${device.label || 'unlabeled'} (${device.deviceId.substring(0, 8)}...)`);
+      });
+      
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      const audioDevices = devices.filter(d => d.kind === 'audioinput');
+      console.log(`Found ${videoDevices.length} camera(s) and ${audioDevices.length} microphone(s)`);
+    } catch (err) {
+      console.warn('Could not enumerate devices:', err);
+    }
+    
+    try {
+      // Try to get both video and audio
+      console.log('🎥 Requesting camera and microphone access...');
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
         audio: {
@@ -685,10 +767,41 @@ class SecureMeeting {
           noiseSuppression: true
         }
       });
+      console.log('✓ Camera and microphone access granted');
     } catch (err) {
-      console.error('Media access error:', err);
-      alert(`Camera/microphone access denied: ${err.message}`);
-      throw err;
+      console.error('❌ Camera/microphone error:', {
+        name: err.name,
+        message: err.message,
+        constraint: err.constraint
+      });
+      
+      // Try audio only
+      try {
+        console.log('🎤 Trying audio only...');
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        });
+        console.log('✓ Microphone access granted (no camera)');
+        this.videoEnabled = false;
+        alert(`Camera not available (${err.name}: ${err.message}). Joining with audio only.`);
+      } catch (audioErr) {
+        console.error('❌ Microphone error:', {
+          name: audioErr.name,
+          message: audioErr.message,
+          constraint: audioErr.constraint
+        });
+        
+        // Create empty stream to allow joining without media
+        this.localStream = new MediaStream();
+        this.videoEnabled = false;
+        this.audioEnabled = false;
+        console.log('⚠ Joining without camera or microphone');
+        alert('No camera or microphone found. You can still join and view others.');
+      }
     }
   }
 
@@ -739,13 +852,6 @@ class SecureMeeting {
   returnToMain() {
     if (!this.roomId) return;
     this.ws.send(JSON.stringify({ type: 'switch-breakout', subRoomId: 'main' }));
-  }
-
-  createBreakouts() {
-    if (!this.isHost) return;
-    const countStr = prompt('How many breakout rooms? (e.g., 2)');
-    if (countStr === null) return;
-    this.ws.send(JSON.stringify({ type: 'create-breakouts', count: Number(countStr) }));
   }
 
   assignParticipantTo(subRoomId, targetId) {

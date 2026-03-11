@@ -1,14 +1,72 @@
 {
   "name": "secure-meeting",
   "version": "1.0.0",
+  "description": "Secure video meeting application with E2E encryption",
+  "main": "electron-main.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "start:http": "node server-http.js",
     "setup-pinning": "node generate-keys.js",
     "setup-ssl": "node generate-ssl-cert.js",
-    "setup": "npm run setup-ssl && npm run setup-pinning"
+    "setup": "npm run setup-ssl && npm run setup-pinning",
+    "electron": "electron .",
+    "electron:build": "electron-builder",
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:win": "electron-builder --win",
+    "electron:build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.securemeeting.app",
+    "productName": "Secure Meeting",
+    "files": [
+      "electron-main.js",
+      "server-http.js",
+      "index.html",
+      "client.js",
+      "crypto.js",
+      "styles.css",
+      "ssl/**/*",
+      "server-identity-private.pem",
+      "server-identity-public.pem",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "server-http.js",
+      "index.html",
+      "client.js",
+      "crypto.js",
+      "styles.css",
+      "ssl/**/*",
+      "server-identity-private.pem",
+      "server-identity-public.pem"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network"
+    }
   },
   "dependencies": {
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
   }
 }
