@@ -677,16 +677,18 @@ class SecureMeeting {
   showInviteLink(inviteUrl, expiresAt) {
     const expireTime = new Date(expiresAt).toLocaleTimeString();
     
-    // Construct full URL with current host
-    const fullUrl = `${window.location.protocol}//${window.location.host}/${inviteUrl}`;
+    // Server sends the full URL (either tunnel URL or localhost)
+    const fullUrl = inviteUrl;
     
-    // If accessing via localhost, show a helpful message
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // Check if it's a tunnel URL or localhost
+    const isTunnel = fullUrl.includes('.trycloudflare.com') || fullUrl.includes('.loca.lt') || fullUrl.includes('.ngrok.io');
     
     let message = `Invite link (expires at ${expireTime}):\n\n${fullUrl}`;
     
-    if (isLocalhost) {
-      message += `\n\n⚠️ Note: This link uses 'localhost' which only works on this computer.\nFor other devices on your network, replace 'localhost' with your IP address (e.g., 192.168.x.x)`;
+    if (!isTunnel) {
+      message += `\n\n⚠️ Note: This link uses 'localhost' which only works on this computer.\nFor remote participants, the host needs to generate a public tunnel link.`;
+    } else {
+      message += `\n\n✓ This is a public link that works from anywhere!`;
     }
     
     message += '\n\nShare this link with participants.';

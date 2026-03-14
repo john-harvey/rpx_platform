@@ -5,6 +5,7 @@ import { readFileSync, appendFileSync, existsSync } from 'fs';
 import { createServer } from 'https';
 import { WebSocketServer } from 'ws';
 import { randomBytes, sign, constants as cryptoConstants } from 'crypto';
+import * as cloudflared from 'cloudflared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -13,6 +14,7 @@ let mainWindow;
 let httpServer;
 let wss;
 let logFile;
+let cloudflaredProcess;
 
 // Setup logging to file for Finder launches
 function setupLogging() {
@@ -206,9 +208,44 @@ async function startServer() {
     ws.send(JSON.stringify({ type: 'connected', clientId }));
   });
 
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, async () => {
     const protocol = httpsOptions ? 'https' : 'http';
     log('Server running on ' + protocol + '://localhost:' + PORT);
+    
+    // Start Cloudflare Tunnel
+    try {
+      log('Starting Cloudflare Tunnel...');
+      
+      // Set binary path to writable location
+      const binPath = join(app.getPath('userData'), 'cloudflared');
+      log('Installing cloudflared to: ' + binPath);
+      
+      // Install cloudflared binary if needed
+      await cloudflared.install(binPath);
+      log('Cloudflared binary ready');
+      
+      // Start tunnel
+      const tunnel = await cloudflared.tunnel({
+        '--url': `http://localhost:${PORT}`
+      });
+      
+      cloudflaredProcess = tunnel;
+      
+      const tunnelUrl = await tunnel.url;
+      log('Public URL: ' + tunnelUrl);
+      global.tunnelUrl = tunnelUrl;
+      
+      tunnel.connections.then(() => {
+        log('Cloudflare Tunnel connected');
+      }).catch(err => {
+        log('Tunnel connection error: ' + err.toString());
+      });
+      
+    } catch (err) {
+      log('Failed to create Cloudflare Tunnel: ' + err.toString());
+      log('Stack: ' + err.stack);
+      log('App will only be accessible locally');
+    }
   });
 
   httpServer.on('error', (err) => {
@@ -222,6 +259,9 @@ app.on('ready', () => {
 });
 
 app.on('window-all-closed', () => {
+  if (cloudflaredProcess) {
+    cloudflaredProcess.stop();
+  }
   if (httpServer) {
     httpServer.close();
   }
@@ -238,6 +278,9 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
+  if (cloudflaredProcess) {
+    cloudflaredProcess.stop();
+  }
   if (httpServer) {
     httpServer.close();
   }
@@ -444,7 +487,10 @@ function generateInviteToken(clientId, clients, rooms, inviteTokens) {
     used: false
   });
   
-  const inviteUrl = `${client.roomId}?token=${token}`;
+  // Use tunnel URL if available, otherwise localhost
+  const baseUrl = global.tunnelUrl || 'https://localhost:3000';
+  const inviteUrl = `${baseUrl}/#${client.roomId}?token=${token}`;
+  
   client.ws.send(JSON.stringify({ 
     type: 'token-generated', 
     token,
