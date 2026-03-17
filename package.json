@@ -39,7 +39,8 @@
       "styles.css",
       "ssl/**/*",
       "server-identity-private.pem",
-      "server-identity-public.pem"
+      "server-identity-public.pem",
+      "node_modules/cloudflared/**/*"
     ],
     "mac": {
       "category": "public.app-category.video",

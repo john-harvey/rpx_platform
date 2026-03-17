@@ -216,26 +216,25 @@ async function startServer() {
     try {
       log('Starting Cloudflare Tunnel...');
       
-      // Set binary path to writable location
+      // Set binary path to writable user data location
       const binPath = join(app.getPath('userData'), 'cloudflared');
       log('Installing cloudflared to: ' + binPath);
       
-      // Install cloudflared binary if needed
       await cloudflared.install(binPath);
-      log('Cloudflared binary ready');
+      log('Cloudflared binary ready at: ' + binPath);
       
-      // Start tunnel
-      const tunnel = await cloudflared.tunnel({
+      // Pass the binary path explicitly to tunnel()
+      const { url, connections, stop } = cloudflared.tunnel({
         '--url': `http://localhost:${PORT}`
-      });
+      }, binPath);
       
-      cloudflaredProcess = tunnel;
+      cloudflaredProcess = { stop };
       
-      const tunnelUrl = await tunnel.url;
+      const tunnelUrl = await url;
       log('Public URL: ' + tunnelUrl);
       global.tunnelUrl = tunnelUrl;
       
-      tunnel.connections.then(() => {
+      connections.then(() => {
         log('Cloudflare Tunnel connected');
       }).catch(err => {
         log('Tunnel connection error: ' + err.toString());
