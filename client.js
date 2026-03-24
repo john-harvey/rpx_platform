@@ -59,6 +59,16 @@ class SecureMeeting {
     this.connect();
   }
 
+  parseInviteUrl() {
+    // Parse roomId and token from hash: /#roomId?token=xxx
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return null;
+    const [roomId, queryString] = hash.split('?');
+    if (!roomId) return null;
+    const params = new URLSearchParams(queryString);
+    return { roomId, token: params.get('token') };
+  }
+
   initUI() {
     document.getElementById('createBtn').onclick = () => this.showCreateOptions();
     document.getElementById('confirmCreateBtn').onclick = () => this.confirmCreateRoom();
@@ -330,6 +340,13 @@ class SecureMeeting {
       case 'connected':
         this.clientId = msg.clientId;
         console.log('Connected with client ID:', this.clientId);
+        // Auto-join if invite URL params are present
+        const invite = this.parseInviteUrl();
+        if (invite) {
+          document.getElementById('roomInput').value = invite.roomId;
+          this.pendingToken = invite.token;
+          this.joinRoom();
+        }
         break;
       case 'room-created':
         this.roomId = msg.roomId;
@@ -612,21 +629,16 @@ class SecureMeeting {
   showInviteLink(inviteUrl, expiresAt) {
     const expireTime = new Date(expiresAt).toLocaleTimeString();
     
-    // Construct full URL with current host
-    const fullUrl = `${window.location.protocol}//${window.location.host}/${inviteUrl}`;
-    
-    // If accessing via localhost, show a helpful message
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // Server sends the full URL already - use it directly
+    const fullUrl = inviteUrl;
+    const isTunnel = fullUrl.includes('.trycloudflare.com') || fullUrl.includes('.ngrok.io') || fullUrl.includes('.loca.lt');
     
     let message = `Invite link (expires at ${expireTime}):\n\n${fullUrl}`;
-    
-    if (isLocalhost) {
-      message += `\n\n⚠️ Note: This link uses 'localhost' which only works on this computer.\nFor other devices on your network, replace 'localhost' with your IP address (e.g., 192.168.x.x)`;
-    }
-    
+    message += isTunnel
+      ? '\n\n✓ This is a public link that works from anywhere!'
+      : '\n\n⚠️ This link only works on this computer.';
     message += '\n\nShare this link with participants.';
     
-    // Copy to clipboard
     navigator.clipboard.writeText(fullUrl).then(() => {
       alert(message + '\n\nLink copied to clipboard!');
     }).catch(() => {
@@ -655,7 +667,11 @@ class SecureMeeting {
       return;
     }
     
-    const { roomId, token } = this.parseRoomInput(roomInput);
+    const { roomId, token: parsedToken } = this.parseRoomInput(roomInput);
+    
+    // Use pendingToken from invite URL if available
+    const token = this.pendingToken || parsedToken;
+    this.pendingToken = null;
     
     // Disable button to prevent double-clicks
     const joinBtn = document.getElementById('joinBtn');

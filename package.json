@@ -4,11 +4,34 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "start:tunnel": "node server-pkg.js",
     "setup-pinning": "node generate-keys.js",
     "setup-ssl": "node generate-ssl-cert.js",
-    "setup": "npm run setup-ssl && npm run setup-pinning"
+    "setup": "npm run setup-ssl && npm run setup-pinning",
+    "build:mac": "pkg server-pkg.js --target node20-macos-x64 --output dist/secure-meeting-mac",
+    "build:win": "pkg server-pkg.js --target node20-win-x64 --output dist/secure-meeting-win.exe",
+    "build:all": "npm run build:mac && npm run build:win"
+  },
+  "pkg": {
+    "assets": [
+      "index.html",
+      "client.js",
+      "crypto.js",
+      "styles.css",
+      "ssl/**/*",
+      "server-identity-private.pem",
+      "server-identity-public.pem"
+    ],
+    "scripts": [
+      "server-pkg.js"
+    ]
   },
   "dependencies": {
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "cloudflared": "^0.7.1",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }
