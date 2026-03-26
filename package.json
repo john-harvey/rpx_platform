@@ -10,7 +10,9 @@
     "setup": "npm run setup-ssl && npm run setup-pinning",
     "build:mac": "pkg server-cjs.cjs --target node18-macos-x64 --output dist/secure-meeting-mac",
     "build:win": "pkg server-cjs.cjs --target node18-win-x64 --output dist/secure-meeting-win.exe",
-    "build:all": "npm run build:mac && npm run build:win"
+    "build:all": "npm run build:mac && npm run build:win",
+    "package:mac": "npm run build:mac && node scripts/package-mac.cjs",
+    "package:win": "npm run build:win && node scripts/package-win.cjs"
   },
   "pkg": {
     "assets": [
